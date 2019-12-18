@@ -1,5 +1,5 @@
 CREATE or REPLACE VIEW ipt AS SELECT
-	co.catalog_number as catalogNumber,
+	distinct(co.catalog_number) as catalogNumber,
 	/* Missing Previous Catalog Number*/
 	/*Should below be the co.id?*/
 	co.collecting_event_id as occurenceID,
@@ -19,38 +19,45 @@ CREATE or REPLACE VIEW ipt AS SELECT
  	/*j.name as higherGeography,*/
  	concat_ws('|',continent.name,country.name,state.name,j.name) as higherGeography,
  	'Ichthyology Collection'  AS collectionCode,
-  	'TNHC'  AS institutionCode,
-  	/*CASE
-  			when continent.name = 'Earth' then
-  				country.name as continent
-  				state.name as country
-  				county.name as state
-  			when country.name = 'Earth' then
-  				state.name as continent
-  				county.name as country
-  			when state.name = 'Earth' then
-  				county.name as continent
-  	END;*/
-
+  'TNHC'  AS institutionCode,
   	(CASE
-  			when continent.name = 'Earth' then country.name
+        when state.name = 'Earth' then j.name
   			when country.name = 'Earth' then state.name
-  			when state.name = 'Earth' then j.name
+        when continent.name = 'Earth' then country.name
   			else continent.name
   	END) as continent,
   	(CASE
-  			when country.name = 'Earth' then state.name
-  			when state.name = 'Earth' then j.name
+        when country.name = 'Earth' then j.name
+  			when continent.name = 'Earth' then state.name
   			else country.name	
   	END) as country,
   	(CASE
-  			when state.name = 'Earth' then j.name	
+  			when country.name is null then ''	
+        when continent.name is null then ''
   			else state.name
   	END) as state,
   	(CASE
-  			when j.name = 'Earth' then ''
+        when state.name is null then ''
+        when country.name is null then ''
+        when continent.name is null then ''
   			else j.name	
-  	END) as county
+  	END) as county,
+
+    l.name as locality,
+    coalesce(cast(l.longitude as text),'') as decimalLongitude,
+    coalesce(cast(l.latitude as text),'') as decimalLatitude,
+    round(l.maximum_uncertainty_estimate) as coordinateUncertaintyInMeters,
+    l.remarks as georeferenceRemarks,
+    dd.name as identifiedBy,
+    /* Using Date Last Modified as Default */
+    de.last_modified as dateIdentified,
+    coalesce(de.identification_comments,'') as identificationRemarks,
+    
+    /************Type Status? ********************/
+
+    coalesce(t.full_name,'') as scientificName,
+    coalesce(tr.name,'') as taxon_rank
+
 
 	FROM collection_object as co
 	left join collecting_event as ce on co.collecting_event_id = ce.id
@@ -71,6 +78,13 @@ CREATE or REPLACE VIEW ipt AS SELECT
 	left join jurisdiction as state on state.id = j.parent_id
 	left join jurisdiction as country on country.id = state.parent_id
 	left join jurisdiction as continent on continent.id = country.parent_id
+  /*Create Determiner String*/
+  left join(SELECT collection_object.id as coid, string_agg(concat_ws('',agent.first_name,agent.last_name),'|') as name
+    from collection_object
+    left join determination on determination.collection_object_id = collection_object.id
+    left join agent on agent.id = determination.determiner_id
+    group by coid) as dd on dd.coid = co.id
+  left join taxon as t on t.id = de.taxon_id
+  left join taxon_rank as tr on tr.id = t.taxon_rank_id
 
-
-
+  /* Order By */
