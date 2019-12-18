@@ -56,7 +56,93 @@ CREATE or REPLACE VIEW ipt AS SELECT
     /************Type Status? ********************/
 
     coalesce(t.full_name,'') as scientificName,
-    coalesce(tr.name,'') as taxon_rank
+    coalesce(tr.name,'') as taxon_rank,
+
+    (CASE
+      when kingdom.full_name = 'Life' then phylum.full_name
+      when phylum.full_name = 'Life' then class.full_name
+      when class.full_name = 'Life'  then ordert.full_name
+      when ordert.full_name ='Life' then family.full_name
+      when family.full_name = 'Life' then genus.full_name
+      when genus.full_name = 'Life' then species.full_name
+      when species.full_name = 'Life' then t.full_name
+      else kingdom.full_name
+    END) as kingdom,
+    (CASE
+      when kingdom.full_name = 'Life' then class.full_name
+      when phylum.full_name = 'Life'  then ordert.full_name
+      when class.full_name ='Life' then family.full_name
+      when ordert.full_name = 'Life' then genus.full_name
+      when family.full_name = 'Life' then species.full_name
+      when genus.full_name = 'Life' then t.full_name
+      when species.full_name = 'Life' then ''
+      else phylum.full_name
+    END) as phylum,
+    (CASE
+      when kingdom.full_name = 'Life' then ordert.full_name
+      when phylum.full_name = 'Life'  then family.full_name
+      when class.full_name ='Life' then genus.full_name
+      when ordert.full_name = 'Life' then species.full_name
+      when family.full_name = 'Life' then t.full_name
+      when genus.full_name = 'Life' then ''
+      when species.full_name = 'Life' then ''
+      else class.full_name
+    END) as class,
+    (CASE
+      when kingdom.full_name = 'Life' then family.full_name
+      when phylum.full_name = 'Life'  then genus.full_name
+      when class.full_name ='Life' then species.full_name
+      when ordert.full_name = 'Life' then t.full_name
+      when family.full_name = 'Life' then ''
+      when genus.full_name = 'Life' then ''
+      when species.full_name = 'Life' then ''
+      else ordert.full_name
+    END) as order,
+    (CASE
+      when kingdom.full_name = 'Life' then genus.full_name
+      when phylum.full_name = 'Life'  then species.full_name
+      when class.full_name ='Life' then t.full_name
+      when ordert.full_name = 'Life' then ''
+      when family.full_name = 'Life' then ''
+      when genus.full_name = 'Life' then ''
+      when species.full_name = 'Life' then ''
+      else family.full_name
+    END) as family,
+    (CASE
+      when kingdom.full_name = 'Life' then species.full_name
+      when phylum.full_name = 'Life'  then t.full_name
+      when class.full_name ='Life' then ''
+      when ordert.full_name = 'Life' then ''
+      when family.full_name = 'Life' then ''
+      when genus.full_name = 'Life' then ''
+      when species.full_name = 'Life' then ''
+      else genus.full_name
+    END) as genus,
+    (CASE
+      when kingdom.full_name = 'Life' then split_part(t.full_name,' ',2)
+      when phylum.full_name = 'Life'  then ''
+      when class.full_name ='Life' then ''
+      when ordert.full_name = 'Life' then ''
+      when family.full_name = 'Life' then ''
+      when genus.full_name = 'Life' then ''
+      when species.full_name = 'Life' then ''
+      else species.full_name
+    END) as specificEpithet,
+
+    /*Don't know if there are any sub-species determinations in Taxonomy?*/
+    (CASE
+      when kingdom.full_name = 'Life' then ''
+      when phylum.full_name = 'Life'  then ''
+      when class.full_name ='Life' then ''
+      when ordert.full_name = 'Life' then ''
+      when family.full_name = 'Life' then ''
+      when genus.full_name = 'Life' then ''
+      when species.full_name = 'Life' then ''
+      else species.full_name
+    END) as infraspecificEpithet
+
+    /* Sequence Data & Media Attachments? */
+    /* Couldn't figure out how this was formatted */
 
 
 	FROM collection_object as co
@@ -84,7 +170,15 @@ CREATE or REPLACE VIEW ipt AS SELECT
     left join determination on determination.collection_object_id = collection_object.id
     left join agent on agent.id = determination.determiner_id
     group by coid) as dd on dd.coid = co.id
+  /*Subspecies*/
   left join taxon as t on t.id = de.taxon_id
   left join taxon_rank as tr on tr.id = t.taxon_rank_id
-
+  left join taxon as species on species.id = t.parent_id
+  left join taxon as genus on genus.id = species.parent_id
+  left join taxon as family on family.id = genus.parent_id
+  left join taxon as ordert on ordert.id = family.parent_id
+  left join taxon as class on class.id = ordert.parent_id
+  left join taxon as phylum on phylum.id = class.parent_id
+  left join taxon as kingdom on kingdom.id = phylum.parent_id
   /* Order By */
+  order by co.catalog_number
